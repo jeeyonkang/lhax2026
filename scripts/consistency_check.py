@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """ledger/ledger.csv 값과 문서 속 수치·날짜·요일을 대조한다. 표준 라이브러리만 사용, 아무 파일도 고치지 않는다.
 
-사용: python3 scripts/consistency_check.py [--stage "고치기 전"] > outputs/m3/consistency_report.md
+사용: python3 scripts/consistency_check.py [--after --stage "고친 뒤"] > outputs/m3/consistency_report.md
 대상: inputs/m3 초안 2개 + outputs/m1/minutes.md(5절만). 불일치가 있으면 종료 코드 1.
 """
 import argparse
@@ -16,6 +16,11 @@ LEDGER = ROOT / "ledger" / "ledger.csv"
 DOCS = [
     ("A-M3-01 협조전 초안", ROOT / "inputs/m3/A-M3-01_하자보수요청_협조전_초안.md", None),
     ("A-M3-02 업무보고서 초안", ROOT / "inputs/m3/A-M3-02_하자집계_업무보고서_초안.md", None),
+    ("minutes.md 5절", ROOT / "outputs/m1/minutes.md", r"## 5\."),
+]
+AFTER_DOCS = [
+    ("doc_A-M3-01 협조전", ROOT / "outputs/m3/doc_A-M3-01.md", None),
+    ("doc_A-M3-02 업무보고서", ROOT / "outputs/m3/doc_A-M3-02.md", None),
     ("minutes.md 5절", ROOT / "outputs/m1/minutes.md", r"## 5\."),
 ]
 WD = "월화수목금토일"
@@ -76,11 +81,14 @@ def pick_date(line, kw_end):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--stage", default="고치기 전")
-    stage = ap.parse_args().stage
+    ap.add_argument("--after", action="store_true", help="고친 문서(outputs/m3/doc_*, minutes.md)를 대조")
+    args = ap.parse_args()
+    stage = args.stage
+    docs = AFTER_DOCS if args.after else DOCS
     ledger = load_ledger()
     bad = 0
     res, wk = [], []
-    for label, path, start in DOCS:
+    for label, path, start in docs:
         for n, line in section_lines(path, start):
             for item, kind, pat in RULES:
                 row = ledger.get(item)
@@ -117,7 +125,7 @@ def main():
     mark = {True: "일치", False: "**불일치**", None: "확인 필요"}
     print(f"# 정합성 점검 결과 — {stage}\n")
     print("> [가상 자료 기반] `scripts/consistency_check.py` 실행 결과. 기준은 `ledger/ledger.csv`이며 대상 문서는 읽기만 했다.")
-    print("> 대상: `inputs/m3` 초안 2개, `outputs/m1/minutes.md` 5절(후속 조치). 날짜 칸은 YYYY-MM-DD(요일) 형식으로 정리했다.\n")
+    print(f"> 대상: {', '.join(d[0] for d in docs)}. 날짜 칸은 YYYY-MM-DD(요일) 형식으로 정리했다.\n")
     print("## 1. 원장 값 대조\n")
     print("| 원장 ID | 항목 | 문서 위치 | 문서 값 | 원장 값 | 판정 |\n|---|---|---|---|---|---|")
     for r in res:
