@@ -38,20 +38,15 @@ def round1(d):
 
 
 def fix_location(loc, content):
-    """R4: (고친 값, 근거) 또는 (None, 사유). 고칠 수 없으면 None."""
+    """R4: (고친 값, 근거). 공간 없음이면 ("R4b", 사유), 그 밖이면 (None, 사유)."""
     m = re.match(r"^(\d{3})동\s*(\d{3,4})호\s*(\S+)$", loc)
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}", "구분자 정리(동·호 표기)"
     m = re.match(r"^(\d{3})-(\d{3,4})\s+(\S+)$", loc)
     if m:
         return f"{m.group(1)}-{m.group(2)}-{m.group(3)}", "공백 구분을 '-'로 정리"
-    m = re.match(r"^(\d{3})(\d{3,4})$", loc)
-    if m:
-        first = content.split()[0] if content.split() else ""
-        if first in SPACES:
-            return (f"{m.group(1)}-{m.group(2)}-{first}",
-                    f"숫자를 3자리+나머지로 분리, 공간은 하자내용 첫 단어 '{first}'에서 가져옴")
-        return f"{m.group(1)}-{m.group(2)}-{{확인 필요: 공간}}", "숫자 분리, 공간은 자료에 없음"
+    if re.match(r"^\d{6,7}$", loc):
+        return "R4b", "위치코드에 공간 표기가 없음"
     return None, "고칠 수 있는 형식이 아님"
 
 
@@ -116,15 +111,21 @@ def main():
     r3("원문 위치코드")
 
     # R4
+    del_after = []
     for i, d in live.items():
         loc = d["위치코드"]
         if not LOC_RE.match(loc):
             new, why = fix_location(loc, d["하자내용"])
-            if new:
+            if new == "R4b":
+                exclude(i, "R4b", "위치코드 공간없음", list(d.values()))
+                del_after.append(i)
+            elif new:
                 fixes.append((i, d["접수번호"], loc, new, why))
                 d["위치코드"] = new
             else:
                 holds.append(f"{i}행: 위치코드 `{loc}` {why} {{확인 필요: 위치코드}}")
+    for i in del_after:
+        del live[i]
     r3("표준화 후 위치코드")
 
     # R5 / R6
@@ -200,12 +201,12 @@ def main():
     L.append(f"| 처리 후(집계 대상) | {n_after} |\n")
     L.append("## 규칙별 제외 수\n")
     L.append("| 규칙 | 제외 수 | 행 |\n|---|---:|---|")
-    for rule, label in (("R1", "합계 행"), ("R2", "완전 중복"), ("R3", "내용 중복")):
+    for rule, label in (("R1", "합계 행"), ("R2", "완전 중복"), ("R3", "내용 중복"), ("R4b", "위치코드 공간 없음")):
         rr = [str(e[0]) for e in sorted(excluded) if e[1].startswith(rule)]
         L.append(f"| {rule} {label} | {rule_count.get(rule, 0)} | {', '.join(rr) or '-'} |")
     L.append("")
     L.append("## 고쳐서 포함한 행\n")
-    L.append("### R4 위치코드 표준화\n")
+    L.append("### R4a 위치코드 표준화\n")
     L.append("| 원본행 | 접수번호 | 원본값 | 수정값 | 근거 |\n|---|---|---|---|---|")
     for i, no, old, new, why in fixes:
         L.append(f"| {i} | {no} | `{old}` | `{new}` | {why} |")
